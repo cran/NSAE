@@ -1,0 +1,7 @@
+
+export(eblupFH1)
+export(eblupFH2)
+export(eblupNSFH1)
+export(eblupNSFH2)
+import(rlist)
+importFrom("stats", "constrOptim", "dist", "model.frame", "model.matrix", "na.action", "na.omit", "optimize", "pnorm")
