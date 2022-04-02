@@ -35,7 +35,7 @@
 #' # Fit nonstationary Fay-Herriot model using sample and non-sample part of paddy data
 #' result <- eblupNSFH2(y ~ x1+x2, var, latitude, longitude, indicator , method="REML", data = paddy)
 #' result
-eblupNSFH2 <- function (formula, vardir, lat, long, indicator, method = "REML", data) {
+eblupNSFH2 <- function (formula, vardir, lat,long,indicator, method = "REML", data) {
   namevar <- deparse(substitute(vardir))
   nameindic <- deparse(substitute(indicator))
   namelat <- deparse(substitute(lat))
@@ -143,9 +143,9 @@ eblupNSFH2 <- function (formula, vardir, lat, long, indicator, method = "REML", 
   zvalue <- Beta.hat/sqrt(diag(Q))
   pvalue <- 2 * pnorm(abs(zvalue), lower.tail = FALSE)
   coef <- data.frame(beta = Beta.hat, std.error = sqrt(diag(Q)),tvalue = zvalue, pvalue)
-  Sigma.w<-matrix(0,(4*m.sam),(4*m.sam))
-  Sigma.w[1:(3*m.sam),1:(3*m.sam)]<-Sigma.l
-  Sigma.w[(3*m.sam+1):(4*m.sam),(3*m.sam+1):(4*m.sam)]<-Sigma.u
+  Sigma.w<-matrix(0,((p+1)*m.sam),((p+1)*m.sam))
+  Sigma.w[1:(p*m.sam),1:(p*m.sam)]<-Sigma.l
+  Sigma.w[(p*m.sam+1):((p+1)*m.sam),(p*m.sam+1):((p+1)*m.sam)]<-Sigma.u
   w.i<-cbind(Z,I)
   c.i<-x.sam-w.i%*%Sigma.w%*%t(w.i)%*%Vi%*%x.sam
   g1<-matrix(0,m.sam,1)
@@ -154,13 +154,13 @@ eblupNSFH2 <- function (formula, vardir, lat, long, indicator, method = "REML", 
   }
   g2<-matrix(0,m.sam,1)
   for (i in 1:m.sam) {
-    g2[i,1]<-w.i[i,]%*%Sigma.w%*%(diag(4*m.sam)-t(w.i)%*%Vi%*%w.i%*%Sigma.w)%*%cbind(w.i[i,])
+    g2[i,1]<-w.i[i,]%*%Sigma.w%*%(diag((p+1)*m.sam)-t(w.i)%*%Vi%*%w.i%*%Sigma.w)%*%cbind(w.i[i,])
   }
   g3<-matrix(0,m.sam,1)
-  Ds.1<-matrix(0,(4*m.sam),(4*m.sam))
-  Ds.1[1:(3*m.sam),1:(3*m.sam)]<-kronecker(diag(1,p),W.sam)
-  Ds.1[(3*m.sam+1):(4*m.sam),(3*m.sam+1):(4*m.sam)]<-0
-  Ds.2<-diag(c(rep(0,3*m.sam),rep(1,m.sam)))
+  Ds.1<-matrix(0,((p+1)*m.sam),((p+1)*m.sam))
+  Ds.1[1:(p*m.sam),1:(p*m.sam)]<-kronecker(diag(1,p),W.sam)
+  Ds.1[(p*m.sam+1):((p+1)*m.sam),(p*m.sam+1):((p+1)*m.sam)]<-0
+  Ds.2<-diag(c(rep(0,p*m.sam),rep(1,m.sam)))
   B.1<-Z%*%(kronecker(diag(1,p),W.sam))%*%t(Z)
   B.2<-I%*%t(I)
   B<-list(B.1,B.2)
@@ -217,7 +217,7 @@ eblupNSFH2 <- function (formula, vardir, lat, long, indicator, method = "REML", 
   }
   BB<-matrix(0,m.out,1)
   for(i in 1:m.out){
-    ZZ<-matrix(Z.out[i,],1,3*m.out)
+    ZZ<-matrix(Z.out[i,],1,p*m.out)
     BB[i,1]<-ZZ%*%(Sigma.l.out.out-Sigma.l.out%*%t(Z)%*%Vi%*%Z%*%t(Sigma.l.out))%*%t(ZZ)
   }
   EBLUP.MSE.PR.out<-c(AA+sigma2.u.stim.S+BB)
@@ -240,3 +240,4 @@ eblupNSFH2 <- function (formula, vardir, lat, long, indicator, method = "REML", 
   result$nonsample<-result2
   return(result)
 }
+

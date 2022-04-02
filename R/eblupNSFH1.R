@@ -133,9 +133,9 @@ eblupNSFH1 <- function (formula, vardir, lat,long, method = "REML", data) {
   zvalue <- Beta.hat/sqrt(diag(Q))
   pvalue <- 2 * pnorm(abs(zvalue), lower.tail = FALSE)
   coef <- data.frame(beta = Beta.hat, std.error = sqrt(diag(Q)),tvalue = zvalue, pvalue)
-  Sigma.w<-matrix(0,(4*m),(4*m))
-  Sigma.w[1:(3*m),1:(3*m)]<-Sigma.l
-  Sigma.w[(3*m+1):(4*m),(3*m+1):(4*m)]<-Sigma.u
+  Sigma.w<-matrix(0,((p+1)*m),((p+1)*m))
+  Sigma.w[1:(p*m),1:(p*m)]<-Sigma.l
+  Sigma.w[(p*m+1):((p+1)*m),(p*m+1):((p+1)*m)]<-Sigma.u
   w.i<-cbind(Z,I)
   c.i<-X-w.i%*%Sigma.w%*%t(w.i)%*%Vi%*%X
   g1<-matrix(0,m,1)
@@ -144,13 +144,13 @@ eblupNSFH1 <- function (formula, vardir, lat,long, method = "REML", data) {
   }
   g2<-matrix(0,m,1)
   for(i in 1:m) {
-    g2[i,1]<-w.i[i,]%*%Sigma.w%*%(diag(4*m)-t(w.i)%*%Vi%*%w.i%*%Sigma.w)%*%cbind(w.i[i,])
+    g2[i,1]<-w.i[i,]%*%Sigma.w%*%(diag((p+1)*m)-t(w.i)%*%Vi%*%w.i%*%Sigma.w)%*%cbind(w.i[i,])
   }
   g3<-matrix(0,m,1)
-  Ds.1<-matrix(0,(4*m),(4*m))
-  Ds.1[1:(3*m),1:(3*m)]<-kronecker(diag(1,p),W.sam)
-  Ds.1[(3*m+1):(4*m),(3*m+1):(4*m)]<-0
-  Ds.2<-diag(c(rep(0,3*m),rep(1,m)))
+  Ds.1<-matrix(0,((p+1)*m),((p+1)*m))
+  Ds.1[1:(p*m),1:(p*m)]<-kronecker(diag(1,p),W.sam)
+  Ds.1[(p*m+1):((p+1)*m),(p*m+1):((p+1)*m)]<-0
+  Ds.2<-diag(c(rep(0,p*m),rep(1,m)))
   B.1<-Z%*%(kronecker(diag(1,p),W.sam))%*%t(Z)
   B.2<-I%*%t(I)
   B<-list(B.1,B.2)
@@ -187,4 +187,3 @@ eblupNSFH1 <- function (formula, vardir, lat,long, method = "REML", data) {
   result$sample <- result1
   return(result)
 }
-
