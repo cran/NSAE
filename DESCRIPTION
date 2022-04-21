@@ -1,7 +1,7 @@
 Package: NSAE
 Type: Package
 Title: Nonstationary Small Area Estimation
-Version: 0.2.1
+Version: 0.3.0
 Authors@R: c(
     person("Hukum", "Chandra", email = "hchandra12@gmail.com", role = c("aut")),
     person("Nicola", "Salvati", email = "nicola.salvati@unipi.it", role = c("aut")),
@@ -21,10 +21,10 @@ Imports: rlist
 RoxygenNote: 7.1.2
 Depends: R (>= 3.5.0)
 NeedsCompilation: no
-Packaged: 2022-04-02 09:04:48 UTC; saura
+Packaged: 2022-04-21 06:04:40 UTC; LENOVO
 Author: Hukum Chandra [aut],
   Nicola Salvati [aut],
   Ray Chambers [aut],
   Saurav Guha [aut, cre]
 Repository: CRAN
-Date/Publication: 2022-04-02 09:40:05 UTC
+Date/Publication: 2022-04-21 11:10:13 UTC

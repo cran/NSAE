@@ -13,6 +13,7 @@
 #'   \item{\code{\link{eblupFH2}}}{Provides the EBLUPs and MSE under stationary Fay-Herriot model for sample and non-sample area}
 #'   \item{\code{\link{eblupNSFH1}}}{Provides the EBLUPs and MSE under nonstationary Fay-Herriot model for sample area}
 #'   \item{\code{\link{eblupNSFH2}}}{Provides the EBLUPs and MSE under nonstationary Fay-Herriot model for sample and non-sample area}
+#'   \item{\code{\link{NS.test}}}{Provides a p-value for testing spatial nonstationarity in the data.}
 #' }
 #'
 #' @section Reference:
