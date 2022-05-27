@@ -7,6 +7,8 @@
 #' @param formula an object of class list of formula, describe the model to be fitted
 #' @param vardir a vector of sampling variances of direct estimators for each small area
 #' @param method type of fitting method, default is "REML" method
+#' @param MAXITER number of iterations allowed in the algorithm. Default is 100 iterations
+#' @param PRECISION convergence tolerance limit for the Fisher-scoring algorithm. Default value is 1e-04
 #' @param data a data frame comprising the variables named in formula and vardir
 #' @return The function returns a list with the following objects:
 #' \describe{
@@ -20,6 +22,7 @@
 #'         the third column (tvalue) and the p-values of the significance of each coefficient in
 #'         last column (pvalue)
 #'     \item refvar : estimated random effects variance
+#'     \item goodness : goodness of fit statistics
 #'     \item randomeffect : a data frame with the values of the random effect estimators
 #'   }
 #'  }
@@ -29,12 +32,12 @@
 #' # Load data set
 #' data(paddysample)
 #' # Fit Fay-Herriot model using sample part of paddy data
-#' result <- eblupFH1(y ~ x1+x2, var, method="REML", data = paddysample)
+#' result <- eblupFH1(y ~ x1+x2, var, "REML", 100, 1e-04,paddysample)
 #' result
-eblupFH1 <- function (formula, vardir, method = "REML", data) {
+eblupFH1 <- function (formula, vardir, method = "REML", MAXITER, PRECISION,data) {
   namevar <- deparse(substitute(vardir))
   if (!missing(data)) {
-    formuladata <- model.frame(formula, na.action = na.omit, data)
+    formuladata <- model.frame(formula, na.action = na.omit,data)
     X <- model.matrix(formula, data)
     vardir <- data[, namevar]
   }
@@ -54,24 +57,26 @@ eblupFH1 <- function (formula, vardir, method = "REML", data) {
   direct <- y
   I<-diag(1,m)
   p<-dim(X)[2]
-  logl=function(delta){
-    area=m
-    psi=matrix(c(vardir),area,1)
-    Y=matrix(c(direct),area,1)
-    Z.area=diag(1,area)
-    sigma.u<-delta[1]
-    V<-sigma.u*Z.area%*%t(Z.area)+I*psi[,1]
-    Vi<-solve(V)
-    Xt<-t(X)
-    XVi<-Xt%*%Vi
-    Q<-solve(XVi%*%X)
-    P<-Vi-(Vi%*%X%*%Q%*%XVi)
-    b.s<-Q%*%XVi%*%Y
-    ee<-eigen(V)
-    -(area/2)*log(2*pi)-0.5*sum(log(ee$value))-(0.5)*log(det(t(X)%*%Vi%*%X))-(0.5)*t(Y)%*%P%*%Y
+  Aest.REML <- 0
+  Aest.REML[1] <- median(vardir)
+  k <- 0
+  diff <- PRECISION + 1
+  while ((diff > PRECISION) & (k < MAXITER)) {
+    k <- k + 1
+    Vi <- 1/(Aest.REML[k] + vardir)
+    XtVi <- t(Vi * X)
+    Q <- solve(XtVi %*% X)
+    P <- diag(Vi) - t(XtVi) %*% Q %*% XtVi
+    Py <- P %*% y
+    s <- (-0.5) * sum(diag(P)) + 0.5 * (t(Py) %*% Py)
+    F <- 0.5 * sum(diag(P %*% P))
+    Aest.REML[k + 1] <- Aest.REML[k] + s/F
+    diff <- abs((Aest.REML[k + 1] - Aest.REML[k])/Aest.REML[k])
   }
-  opt<-optimize(logl,c(0.001,100),maximum = TRUE)
-  estsigma2u<-opt$maximum
+  A.REML <- max(Aest.REML[k + 1], 0)
+  if (k >= MAXITER && diff >= PRECISION)
+    warning(paste("REML failed to converge in", MAXITER, "steps"))
+  estsigma2u<-A.REML
   Xt <-t(X)
   D=diag(1,m)
   V<-estsigma2u*D%*%t(D)+I*vardir
@@ -84,6 +89,10 @@ eblupFH1 <- function (formula, vardir, method = "REML", data) {
   EBLUP.Mean<-X%*%Beta.hat+D%*%u.hat
   zvalue <- Beta.hat/sqrt(diag(Q))
   pvalue <- 2 * pnorm(abs(zvalue), lower.tail = FALSE)
+  loglike <- (-0.5) * (sum(log(2 * pi * (A.REML + vardir)) + (res^2)/(A.REML + vardir)))
+  AIC <- (-2) * loglike + 2 * (p + 1)
+  BIC <- (-2) * loglike + (p + 1) * log(m)
+  goodness <- c(loglike = loglike, AIC = AIC, BIC = BIC)
   coef <- data.frame(beta = Beta.hat, std.error = sqrt(diag(Q)),tvalue = zvalue, pvalue)
   g1<-NULL
   Ga<-Sigma.u-Sigma.u%*%Vi%*%Sigma.u
@@ -103,15 +112,17 @@ eblupFH1 <- function (formula, vardir, method = "REML", data) {
   for (i in 1:m) {
     g3[i]=(vardir[i]^2)*(vardir[i]+estsigma2u)^(-3)*II
   }
-  EBLUP.MSE.PR<-c(g1+g2+g3)
+  EBLUP.MSE.PR<-c(g1+g2+2*g3)
   areacode=1:m
   FH.SE=round(sqrt(EBLUP.MSE.PR),2)
   FH.CV=round(100*(sqrt(EBLUP.MSE.PR)/EBLUP.Mean),2)
   result1= cbind(areacode,EBLUP.Mean, EBLUP.MSE.PR,FH.SE,FH.CV)
   colnames(result1)=c("area","EBLUP","EBLUP.MSE","EBLUP.SE","EBLUP.CV")
-  result <- list(eblup = NA, mse = NA, sample = NA,fit = list(estcoef = NA, refvar = NA))
+  result <- list(eblup = NA, mse = NA, sample = NA,
+                 fit = list(estcoef = NA, refvar = NA, randomeffect = NA, goodness = NA))
   result$fit$estcoef <- coef
   result$fit$refvar <- estsigma2u
+  result$fit$goodness <- goodness
   result$fit$randomeffect <- u.hat
   result$eblup <- EBLUP.Mean
   result$mse <- EBLUP.MSE.PR

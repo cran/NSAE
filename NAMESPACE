@@ -4,6 +4,15 @@ export(eblupFH2)
 export(eblupNSFH1)
 export(eblupNSFH2)
 export(NS.test)
-import(rlist)
-importFrom("stats", "rnorm","constrOptim", "dist", "model.frame", "model.matrix", "na.action", "na.omit", "optimize", "pnorm")
+export(ebp)
+export(ebpNS)
+export(ebpSP)
+export(ebpNP)
+export(NSglm.test)
+
+
+
+import(rlist,cluster,MASS,lattice,Matrix,numDeriv,nlme,spgwr,SemiPar)
+
+importFrom("stats","rbinom", "median","rnorm","constrOptim", "dist", "model.frame", "model.matrix", "na.action", "na.omit", "optimize", "pnorm")
 

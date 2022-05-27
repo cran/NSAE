@@ -4,7 +4,16 @@
 \alias{eblupNSFH1}
 \title{EBLUP under nonstationary Fay-Herriot model for sample area}
 \usage{
-eblupNSFH1(formula, vardir, lat, long, method = "REML", data)
+eblupNSFH1(
+  formula,
+  vardir,
+  lat,
+  long,
+  method = "REML",
+  MAXITER,
+  PRECISION,
+  data
+)
 }
 \arguments{
 \item{formula}{an object of class list of formula, describe the model to be fitted}
@@ -16,6 +25,10 @@ eblupNSFH1(formula, vardir, lat, long, method = "REML", data)
 \item{long}{a vector of longitude for each small area}
 
 \item{method}{type of fitting method, default is "REML" methods}
+
+\item{MAXITER}{number of iterations allowed in the algorithm. Default is 100 iterations}
+
+\item{PRECISION}{convergence tolerance limit for the Fisher-scoring algorithm. Default value is 1e-04}
 
 \item{data}{a data frame comprising the variables named in formula, vardir, lat and long}
 }
@@ -31,6 +44,7 @@ The function returns a list with the following objects:
     \item refvar : estimated random effects variance
     \item spatialcorr : spatial correlation parameter
     \item randomeffect : a data frame with the values of the random effect estimators
+    \item goodness : goodness of fit statistics
   }
  }
 }
@@ -42,6 +56,6 @@ This function gives the EBLUP and the estimate of mean squared error (mse)
 # Load data set
 data(paddysample)
 # Fit nonstationary Fay-Herriot model using sample part of paddy data
-result <- eblupNSFH1(y ~ x1+x2, var, latitude, longitude, method="REML", data = paddysample)
+result <- eblupNSFH1(y ~ x1+x2, var, latitude, longitude, "REML", 100, 1e-04,paddysample)
 result
 }

@@ -8,6 +8,8 @@
 #' @param lat a vector of latitude for each small area
 #' @param long a vector of longitude for each small area
 #' @param method type of fitting method, default is "REML" methods
+#' @param MAXITER number of iterations allowed in the algorithm. Default is 100 iterations
+#' @param PRECISION convergence tolerance limit for the Fisher-scoring algorithm. Default value is 1e-04
 #' @param data a data frame comprising the variables named in formula, vardir, lat and long
 #'
 #' @return The function returns a list with the following objects:
@@ -21,6 +23,7 @@
 #'     \item refvar : estimated random effects variance
 #'     \item spatialcorr : spatial correlation parameter
 #'     \item randomeffect : a data frame with the values of the random effect estimators
+#'     \item goodness : goodness of fit statistics
 #'   }
 #'  }
 #'
@@ -30,9 +33,9 @@
 #' # Load data set
 #' data(paddysample)
 #' # Fit nonstationary Fay-Herriot model using sample part of paddy data
-#' result <- eblupNSFH1(y ~ x1+x2, var, latitude, longitude, method="REML", data = paddysample)
+#' result <- eblupNSFH1(y ~ x1+x2, var, latitude, longitude, "REML", 100, 1e-04,paddysample)
 #' result
-eblupNSFH1 <- function (formula, vardir, lat,long, method = "REML", data) {
+eblupNSFH1 <- function (formula, vardir, lat,long, method = "REML",MAXITER,PRECISION, data) {
   namevar <- deparse(substitute(vardir))
   namelat <- deparse(substitute(lat))
   namelong <- deparse(substitute(long))
@@ -63,55 +66,52 @@ eblupNSFH1 <- function (formula, vardir, lat,long, method = "REML", data) {
   distance<-as.matrix(dist(cbind(as.vector(lat),as.vector(long))))
   W <- 1/(1+distance)
   W.sam <- W[1:m,1:m]
-  logl=function(delta)  {
-    area=m
-    psi=matrix(c(vardir),area,1)
-    Y=matrix(c(direct),area,1)
-    Z.area=diag(1,area)
-    lambda<-delta[1]
-    sigma.u<-delta[2]
-    C<-lambda*diag(1,p)
-    Cov<-(X%*%C%*%t(X))*W.sam+sigma.u*Z.area%*%t(Z.area)
-    V<-Cov+I*psi[,1]
-    Vi<-solve(V)
+  par.stim <- matrix(0, 2, 1)
+  stime.fin <- matrix(0, 2, 1)
+  s <- matrix(0, 2, 1)
+  Idev <- matrix(0, 2, 2)
+  sigma2.u.stim.S <- 0
+  lamda.stim.S <- 0
+  sigma2.u.stim.S[1] <- median(vardir)
+  lamda.stim.S[1] <- 0.5
+  k <- 0
+  diff.S <- PRECISION + 1
+  while ((diff.S > PRECISION) & (k < MAXITER)) {
+    k <- k + 1
+    Z.area=diag(1,m)
+    C<-lamda.stim.S[k]*diag(1,p)
+    Cov<-(X%*%C%*%t(X))*W.sam+sigma2.u.stim.S[k]*Z.area%*%t(Z.area)
+    V <- Cov + I * vardir
+    Vi <- solve(V)
     Xt=t(X)
-    XVi<-Xt%*%Vi
-    Q<-solve(XVi%*%X)
-    P<-Vi-(Vi%*%X%*%Q%*%XVi)
-    b.s<-Q%*%XVi%*%Y
-    ee=eigen(V)
-    -(area/2)*log(2*pi)-0.5*sum(log(ee$value))-(0.5)*log(det(t(X)%*%Vi%*%X))-(0.5)*t(Y)%*%P%*%Y
+    yt=t(y)
+    XtVi <- Xt %*% Vi
+    Q <- solve(XtVi %*% X)
+    P <- Vi - t(XtVi) %*% Q %*% XtVi
+    b.s <- Q %*% XtVi %*% y
+    derVlamda<-(X%*%t(X))*W
+    derSigma<-Z.area%*%t(Z.area)
+    PD <- P %*% derSigma
+    PR <- P %*% derVlamda
+    Pdir <- P %*% y
+    s[1, 1] <- (-0.5) * sum(diag(PD)) + (0.5) * (yt %*%PD %*% Pdir)
+    s[2, 1] <- (-0.5) * sum(diag(PR)) + (0.5) * (yt %*%PR %*% Pdir)
+    Idev[1, 1] <- (0.5) * sum(diag(PD %*% PD))
+    Idev[1, 2] <- (0.5) * sum(diag(PD %*% PR))
+    Idev[2, 1] <- Idev[1, 2]
+    Idev[2, 2] <- (0.5) * sum(diag(PR %*% PR))
+    par.stim[1, 1] <- sigma2.u.stim.S[k]
+    par.stim[2, 1] <- lamda.stim.S[k]
+    stime.fin <- par.stim + solve(Idev) %*% s
+    sigma2.u.stim.S[k + 1] <- stime.fin[1, 1]
+    lamda.stim.S[k + 1] <- stime.fin[2, 1]
+    diff.S <- max(abs(stime.fin - par.stim)/par.stim)
   }
-  grr=function(delta) {
-    lambda<-delta[1]
-    sigma.u<-delta[2]
-    area=m
-    psi=matrix(c(vardir),area,1)
-    Y=matrix(c(direct),area,1)
-    Z.area=diag(1,area)
-    I<-diag(1,area)
-    C<-lambda*diag(1,p)
-    Cov<-(X%*%C%*%t(X))*W.sam+sigma.u*Z.area%*%t(Z.area)
-    V<-Cov+I*psi[,1]
-    Vi<-solve(V)
-    Xt=t(X)
-    XVi<-Xt%*%Vi
-    Q<-solve(XVi%*%X)
-    P<-Vi-(Vi%*%X%*%Q%*%XVi)
-    derLambda<-(X%*%t(X))*W
-    derSigmau<-Z.area%*%t(Z.area)
-    s<-matrix(0,2,1)
-    PG<-P%*%derLambda
-    PU<-P%*%derSigmau
-    Pdir<-P%*%Y
-    s[1,1]<-((-0.5)*sum(diag(PG)))+((0.5)*(t(Y)%*%PG%*%Pdir))
-    s[2,1]<-((-0.5)*sum(diag(PU)))+((0.5)*(t(Y)%*%PU%*%Pdir))
-    c(s[1,1],s[2,1])
-  }
-  opt=constrOptim(c(0.1,0.2),logl,grr,method="Nelder-Mead",ui=rbind(c(1,0),c(0,1)),
-                  ci=c(0.001,0),control=list(fnscale=-1))
-  lambda.stim.S=opt$par[1]
-  sigma2.u.stim.S=opt$par[2]
+  if (k >= MAXITER && diff.S >= PRECISION)
+    warning(paste("REML failed to converge in", MAXITER, "steps"))
+  lambda.stim.S <- lamda.stim.S[k + 1]
+  sigma2.u.stim.S[k + 1] <- max(sigma2.u.stim.S[k + 1], 0)
+  sigma2.u.stim.S <- sigma2.u.stim.S[k + 1]
   C.est<-lambda.stim.S*diag(1,p)
   Sigma.l<-kronecker(C.est,W.sam)
   z.mat = list()
@@ -132,6 +132,11 @@ eblupNSFH1 <- function (formula, vardir, lat,long, method = "REML", data) {
   EBLUP.Mean<-X%*%Beta.hat+Z%*%spatial.hat+I%*%u.hat
   zvalue <- Beta.hat/sqrt(diag(Q))
   pvalue <- 2 * pnorm(abs(zvalue), lower.tail = FALSE)
+  loglike <- (-0.5) * (m * log(2 * pi) + determinant(V, logarithm = TRUE)$modulus +
+                         t(res) %*% Vi %*% res)
+  AIC <- (-2) * loglike + 2 * (p + 2)
+  BIC <- (-2) * loglike + (p + 2) * log(m)
+  goodness <- c(loglike = loglike, AIC = AIC, BIC = BIC)
   coef <- data.frame(beta = Beta.hat, std.error = sqrt(diag(Q)),tvalue = zvalue, pvalue)
   Sigma.w<-matrix(0,((p+1)*m),((p+1)*m))
   Sigma.w[1:(p*m),1:(p*m)]<-Sigma.l
@@ -177,10 +182,11 @@ eblupNSFH1 <- function (formula, vardir, lat,long, method = "REML", data) {
   result1= cbind(areacode,EBLUP.Mean, EBLUP.MSE.PR,FH.SE,FH.CV)
   colnames(result1)=c("area","EBLUP","EBLUP.MSE","EBLUP.SE","EBLUP.CV")
   result <- list(eblup = NA, mse = NA, sample = NA,
-                 fit = list(estcoef = NA, refvar = NA, spatialcorr = NA, randomeffect = NA))
+                 fit = list(estcoef = NA, refvar = NA, spatialcorr = NA, randomeffect = NA, goodness = NA))
   result$fit$estcoef <- coef
   result$fit$refvar <- sigma2.u.stim.S
   result$fit$spatialcorr <- lambda.stim.S
+  result$fit$goodness <- goodness
   result$fit$randomeffect <- u.hat
   result$eblup <- EBLUP.Mean
   result$mse <- EBLUP.MSE.PR

@@ -4,7 +4,7 @@
 \alias{eblupFH2}
 \title{EBLUP under stationary Fay-Herriot model for sample and  non-sample area}
 \usage{
-eblupFH2(formula, vardir, indicator, method = "REML", data)
+eblupFH2(formula, vardir, indicator, method = "REML", MAXITER, PRECISION, data)
 }
 \arguments{
 \item{formula}{an object of class list of formula, describe the model to be fitted}
@@ -14,6 +14,10 @@ eblupFH2(formula, vardir, indicator, method = "REML", data)
 \item{indicator}{a vector indicating the sample and non-sample area}
 
 \item{method}{type of fitting method, default is "REML" methods}
+
+\item{MAXITER}{number of iterations allowed in the algorithm. Default is 100 iterations}
+
+\item{PRECISION}{convergence tolerance limit for the Fisher-scoring algorithm. Default value is 1e-04}
 
 \item{data}{a data frame comprising the variables named in formula and vardir}
 }
@@ -30,6 +34,7 @@ The function returns a list with the following objects:
   \itemize{
     \item estcoef : a data frame with the estimated model coefficients in the first column (beta),their asymptotic standard errors in the second column (std.error), the t statistics in the third column (tvalue) and the p-values of the significance of each coefficient in last column (pvalue)
     \item refvar : estimated random effects variance
+    \item goodness : goodness of fit statistics
     \item randomeffect : a data frame with the values of the random effect estimators
   }
  }
@@ -42,6 +47,6 @@ This function gives the EBLUP and the estimate of mean squared error (mse)
 # Load data set
 data(paddy)
 # Fit Fay-Herriot model using sample and non-sample part of paddy data
-result <- eblupFH2(y ~ x1+x2, var, indicator ,method="REML", data = paddy)
+result <- eblupFH2(y ~ x1+x2, var, indicator ,"REML", 100, 1e-04,paddy)
 result
 }

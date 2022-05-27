@@ -9,6 +9,8 @@
 #' @param long a vector of longitude for each small area
 #' @param indicator a vector indicating the sample and non-sample area
 #' @param method type of fitting method, default is "REML" methods
+#' @param MAXITER number of iterations allowed in the algorithm. Default is 100 iterations
+#' @param PRECISION convergence tolerance limit for the Fisher-scoring algorithm. Default value is 1e-04
 #' @param data a data frame comprising the variables named in formula, vardir, lat and long
 #'
 #' @return The function returns a list with the following objects:
@@ -25,6 +27,7 @@
 #'     \item refvar : estimated random effects variance
 #'     \item spatialcorr : estimated spatial correlation parameter
 #'     \item randomeffect : a data frame with the values of the random effect estimators
+#'     \item goodness : goodness of fit statistics
 #'   }
 #'  }
 #' @export eblupNSFH2
@@ -33,9 +36,9 @@
 #' # Load data set
 #' data(paddy)
 #' # Fit nonstationary Fay-Herriot model using sample and non-sample part of paddy data
-#' result <- eblupNSFH2(y ~ x1+x2, var, latitude, longitude, indicator , method="REML", data = paddy)
+#' result <- eblupNSFH2(y ~ x1+x2, var, latitude, longitude, indicator , "REML", 100, 1e-04,paddy)
 #' result
-eblupNSFH2 <- function (formula, vardir, lat,long,indicator, method = "REML", data) {
+eblupNSFH2 <- function (formula, vardir, lat, long, indicator, method = "REML", MAXITER,PRECISION, data) {
   namevar <- deparse(substitute(vardir))
   nameindic <- deparse(substitute(indicator))
   namelat <- deparse(substitute(lat))
@@ -72,61 +75,55 @@ eblupNSFH2 <- function (formula, vardir, lat,long,indicator, method = "REML", da
   distance<-as.matrix(dist(cbind(as.vector(lat),as.vector(long))))
   W <- 1/(1+distance)
   W.sam <- W[1:m.sam,1:m.sam]
-  logl=function(delta)  {
-    area=m.sam
-    psi=matrix(c(vardir[1:area]),area,1)
-    Y=matrix(c(direct),area,1)
-    X=x.sam
-    Z.area=diag(1,area)
-    lambda<-delta[1]
-    sigma.u<-delta[2]
-    C<-lambda*diag(1,p)
-    Cov<-(X%*%C%*%t(X))*W.sam+sigma.u*Z.area%*%t(Z.area)
-    V<-Cov+I*psi[,1]
-    Vi<-solve(V)
-    Xt=t(X)
-    XVi<-Xt%*%Vi
-    Q<-solve(XVi%*%X)
-    P<-Vi-(Vi%*%X%*%Q%*%XVi)
-    b.s<-Q%*%XVi%*%Y
-    ee=eigen(V)
-    -(area/2)*log(2*pi)-0.5*sum(log(ee$value))-(0.5)*log(det(t(X)%*%Vi%*%X))-(0.5)*t(Y)%*%P%*%Y
+  par.stim <- matrix(0, 2, 1)
+  stime.fin <- matrix(0, 2, 1)
+  s <- matrix(0, 2, 1)
+  Idev <- matrix(0, 2, 2)
+  sigma2.u.stim.S <- 0
+  lamda.stim.S <- 0
+  sigma2.u.stim.S[1] <- median(vardir[1:m.sam])
+  lamda.stim.S[1] <- 0.2
+  k <- 0
+  diff.S <- PRECISION + 1
+  while ((diff.S > PRECISION) & (k < MAXITER)) {
+    k <- k + 1
+    Z.area=diag(1,m.sam)
+    C<-lamda.stim.S[k]*diag(1,p)
+    Cov<-(x.sam%*%C%*%t(x.sam))*W.sam+sigma2.u.stim.S[k]*Z.area%*%t(Z.area)
+    V <- Cov + I * vardir[1:m.sam]
+    Vi <- solve(V)
+    Xt=t(x.sam)
+    yt=t(y.sam)
+    XtVi <- Xt %*% Vi
+    Q <- solve(XtVi %*% x.sam)
+    P <- Vi - t(XtVi) %*% Q %*% XtVi
+    b.s <- Q %*% XtVi %*% y.sam
+    derVlamda<-(x.sam%*%t(x.sam))*W.sam
+    derSigma<-Z.area%*%t(Z.area)
+    PD <- P %*% derSigma
+    PR <- P %*% derVlamda
+    Pdir <- P %*% y.sam
+    s[1, 1] <- (-0.5) * sum(diag(PD)) + (0.5) * (yt %*%PD %*% Pdir)
+    s[2, 1] <- (-0.5) * sum(diag(PR)) + (0.5) * (yt %*%PR %*% Pdir)
+    Idev[1, 1] <- (0.5) * sum(diag(PD %*% PD))
+    Idev[1, 2] <- (0.5) * sum(diag(PD %*% PR))
+    Idev[2, 1] <- Idev[1, 2]
+    Idev[2, 2] <- (0.5) * sum(diag(PR %*% PR))
+    par.stim[1, 1] <- sigma2.u.stim.S[k]
+    par.stim[2, 1] <- lamda.stim.S[k]
+    stime.fin <- par.stim + solve(Idev) %*% s
+    sigma2.u.stim.S[k + 1] <- stime.fin[1, 1]
+    lamda.stim.S[k + 1] <- stime.fin[2, 1]
+    diff.S <- max(abs(stime.fin - par.stim)/par.stim)
   }
-  grr=function(delta) {
-    lambda<-delta[1]
-    sigma.u<-delta[2]
-    area=m.sam
-    psi=matrix(c(vardir[1:area]),area,1)
-    Y=matrix(c(direct),area,1)
-    X=x.sam
-    Z.area=diag(1,area)
-    C<-lambda*diag(1,p)
-    Cov<-(X%*%C%*%t(X))*W.sam+sigma.u*Z.area%*%t(Z.area)
-    V<-Cov+I*psi[,1]
-    Vi<-solve(V)
-    Xt=t(X)
-    XVi<-Xt%*%Vi
-    Q<-solve(XVi%*%X)
-    P<-Vi-(Vi%*%X%*%Q%*%XVi)
-    derLambda<-(X%*%t(X))*W
-    derSigmau<-Z.area%*%t(Z.area)
-    s<-matrix(0,2,1)
-    PG<-P%*%derLambda
-    PU<-P%*%derSigmau
-    Pdir<-P%*%Y
-    s[1,1]<-((-0.5)*sum(diag(PG)))+((0.5)*(t(Y)%*%PG%*%Pdir))
-    s[2,1]<-((-0.5)*sum(diag(PU)))+((0.5)*(t(Y)%*%PU%*%Pdir))
-    c(s[1,1],s[2,1])
-  }
-  opt=constrOptim(c(0.1,0.2),logl,grr,method="Nelder-Mead",ui=rbind(c(1,0),c(0,1)),
-                  ci=c(0.001,0),control=list(fnscale=-1))
-  lambda.stim.S=opt$par[1]
-  sigma2.u.stim.S=opt$par[2]
+  lambda.stim.S <- lamda.stim.S[k + 1]
+  sigma2.u.stim.S[k + 1] <- max(sigma2.u.stim.S[k + 1], 0)
+  sigma2.u.stim.S <- sigma2.u.stim.S[k + 1]
   C.est<-lambda.stim.S*diag(1,p)
   Sigma.l<-kronecker(C.est,W.sam)
   z.mat = list()
   for (i in 1:p) {
-    z.mat[[i]] <- diag(x.sam[,i])
+      z.mat[[i]] <- diag(x.sam[,i])
   }
   Z <- rlist::list.cbind(z.mat)
   Cov.est<-Z%*%Sigma.l%*%t(Z)+sigma2.u.stim.S*I%*%t(I)
@@ -142,6 +139,11 @@ eblupNSFH2 <- function (formula, vardir, lat,long,indicator, method = "REML", da
   EBLUP.Mean<-x.sam%*%Beta.hat+Z%*%spatial.hat+I%*%u.hat
   zvalue <- Beta.hat/sqrt(diag(Q))
   pvalue <- 2 * pnorm(abs(zvalue), lower.tail = FALSE)
+  loglike <- (-0.5) * (m * log(2 * pi) + determinant(V, logarithm = TRUE)$modulus +
+                         t(res) %*% Vi %*% res)
+  AIC <- (-2) * loglike + 2 * (p + 2)
+  BIC <- (-2) * loglike + (p + 2) * log(m)
+  goodness <- c(loglike = loglike, AIC = AIC, BIC = BIC)
   coef <- data.frame(beta = Beta.hat, std.error = sqrt(diag(Q)),tvalue = zvalue, pvalue)
   Sigma.w<-matrix(0,((p+1)*m.sam),((p+1)*m.sam))
   Sigma.w[1:(p*m.sam),1:(p*m.sam)]<-Sigma.l
@@ -150,11 +152,11 @@ eblupNSFH2 <- function (formula, vardir, lat,long,indicator, method = "REML", da
   c.i<-x.sam-w.i%*%Sigma.w%*%t(w.i)%*%Vi%*%x.sam
   g1<-matrix(0,m.sam,1)
   for (i in 1:m.sam)  {
-    g1[i,1]<-c.i[i,]%*%solve(t(x.sam)%*%Vi%*%x.sam)%*%cbind(c.i[i,])
+      g1[i,1]<-c.i[i,]%*%solve(t(x.sam)%*%Vi%*%x.sam)%*%cbind(c.i[i,])
   }
   g2<-matrix(0,m.sam,1)
   for (i in 1:m.sam) {
-    g2[i,1]<-w.i[i,]%*%Sigma.w%*%(diag((p+1)*m.sam)-t(w.i)%*%Vi%*%w.i%*%Sigma.w)%*%cbind(w.i[i,])
+      g2[i,1]<-w.i[i,]%*%Sigma.w%*%(diag((p+1)*m.sam)-t(w.i)%*%Vi%*%w.i%*%Sigma.w)%*%cbind(w.i[i,])
   }
   g3<-matrix(0,m.sam,1)
   Ds.1<-matrix(0,((p+1)*m.sam),((p+1)*m.sam))
@@ -170,15 +172,15 @@ eblupNSFH2 <- function (formula, vardir, lat,long,indicator, method = "REML", da
   P<-Vi-Vi%*%x.sam%*%solve(t(x.sam)%*%Vi%*%x.sam)%*%t(x.sam)%*%Vi
   for(i in 1:2) {
     for(j in 1:2) {
-      II[i,j]<--0.5*sum(diag(P%*%B[[i]]%*%P%*%B[[j]]))
+        II[i,j]<--0.5*sum(diag(P%*%B[[i]]%*%P%*%B[[j]]))
     }
   }
   II<--II
   ESS<-matrix(0,2,m.sam)
   for (i in 1:m.sam)  {
-    ESS[1,]<-w.i[i,]%*%(Ds.1%*%t(w.i)%*%Vi+Sigma.w%*%t(w.i)%*%Dv.1)
-    ESS[2,]<-w.i[i,]%*%(Ds.2%*%t(w.i)%*%Vi+Sigma.w%*%t(w.i)%*%Dv.2)
-    g3[i,1]<-2*t(direct-x.sam%*%Beta.hat)%*%t(ESS)%*%solve(II)%*%ESS%*%(direct-x.sam%*%Beta.hat)
+      ESS[1,]<-w.i[i,]%*%(Ds.1%*%t(w.i)%*%Vi+Sigma.w%*%t(w.i)%*%Dv.1)
+      ESS[2,]<-w.i[i,]%*%(Ds.2%*%t(w.i)%*%Vi+Sigma.w%*%t(w.i)%*%Dv.2)
+      g3[i,1]<-2*t(direct-x.sam%*%Beta.hat)%*%t(ESS)%*%solve(II)%*%ESS%*%(direct-x.sam%*%Beta.hat)
   }
   EBLUP.MSE.PR<-c(g1+g2+g3)
   areacode=1:m.sam
@@ -194,9 +196,9 @@ eblupNSFH2 <- function (formula, vardir, lat,long,indicator, method = "REML", da
   lon_r<-long[(m.sam+1):m]
   lat_r<-lat[(m.sam+1):m]
   for (i in 1:m.out)  {
-    dbase=as.matrix(rbind(cbind(lon_r[i],lat_r[i]),cbind(as.vector(long[1:m.sam]),as.vector(lat[1:m.sam]))))
-    dim(dbase)
-    dist.r[i,]=c(as.matrix(dist(dbase))[-1,1])
+      dbase=as.matrix(rbind(cbind(lon_r[i],lat_r[i]),cbind(as.vector(long[1:m.sam]),as.vector(lat[1:m.sam]))))
+      dim(dbase)
+      dist.r[i,]=c(as.matrix(dist(dbase))[-1,1])
   }
   distance.out.out<-matrix(0,m.out,m.out)
   distance.out.out<-as.matrix(dist(cbind(as.vector(lon_r),as.vector(lat_r))))
@@ -206,7 +208,7 @@ eblupNSFH2 <- function (formula, vardir, lat,long,indicator, method = "REML", da
   Sigma.l.out.out<-kronecker(C.est,W.out.out)
   z.mat.out = list()
   for (i in 1:p) {
-    z.mat.out[[i]] <- diag(x.out[,i])
+      z.mat.out[[i]] <- diag(x.out[,i])
   }
   Z.out <- rlist::list.cbind(z.mat.out)
   spatial.hat=Sigma.l.out%*%t(Z)%*%Vi%*%res
@@ -227,10 +229,11 @@ eblupNSFH2 <- function (formula, vardir, lat,long,indicator, method = "REML", da
   result2= cbind(areacode.out,EBLUP.Mean.out, EBLUP.MSE.PR.out,FH.SE.out,FH.CV.out)
   colnames(result2)=c("area.out","EBLUP.out","EBLUP.MSE_out","EBLUP.SE.out","EBLUP.CV.out")
   result <- list(eblup = NA, eblup.out = NA,mse = NA, mse.out = NA, sample = NA, nonsample = NA,
-                 fit = list(estcoef = NA, refvar = NA, spatialcorr = NA, randomeffect = NA))
+                 fit = list(estcoef = NA, refvar = NA, spatialcorr = NA, randomeffect = NA, goodness = NA))
   result$fit$estcoef <- coef
   result$fit$refvar <- sigma2.u.stim.S
   result$fit$spatialcorr <- lambda.stim.S
+  result$fit$goodness <- goodness
   result$fit$randomeffect <- u.hat
   result$eblup <- EBLUP.Mean
   result$eblup.out <- EBLUP.Mean.out

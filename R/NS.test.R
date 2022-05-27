@@ -1,4 +1,4 @@
-#' Parametric bootstrap-based spatial nonstationarity test
+#' Parametric bootstrap-based spatial nonstationarity test for Fay-Herroit model
 #'
 #' @description This function performs a parametric bootstrap-based test procudure for testing spatial nonstationarity in the data.
 #'
